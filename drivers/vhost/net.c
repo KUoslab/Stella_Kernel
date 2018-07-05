@@ -30,6 +30,11 @@
 
 #include "vhost.h"
 
+#ifdef ANCS
+LIST_HEAD(ancs_proc_list);
+EXPORT_SYMBOL(ancs_proc_list);
+int count = 1;
+#endif
 static int experimental_zcopytx = 1;
 module_param(experimental_zcopytx, int, 0444);
 MODULE_PARM_DESC(experimental_zcopytx, "Enable Zero Copy TX;"
@@ -109,6 +114,9 @@ struct vhost_net {
 	unsigned tx_zcopy_err;
 	/* Flush in progress. Protected by tx vq lock. */
 	bool tx_flush;
+#ifdef ANCS
+	struct ancs_vm *vnet;
+#endif
 };
 
 static unsigned vhost_net_zcopy_mask __read_mostly;
@@ -295,6 +303,10 @@ static void handle_tx(struct vhost_net *net)
 	struct vhost_virtqueue *vq = &nvq->vq;
 	unsigned out, in;
 	int head;
+#ifdef ANCS
+	struct ancs_vm *vnet = net->vnet;
+	struct list_head *ancs_head;
+#endif	
 	struct msghdr msg = {
 		.msg_name = NULL,
 		.msg_namelen = 0,
@@ -353,6 +365,22 @@ static void handle_tx(struct vhost_net *net)
 		}
 		/* Skip header. TODO: support TSO. */
 		len = iov_length(vq->iov, out);
+#ifdef ANCS
+		ancs_head=&vnet->active_list;
+		if (ancs_head! = ancs_head->prev) { 
+			if(len > vnet->remaining_credit) {
+				vnet->need_reschedule = true;
+				vhost_discard_vq_desc(vq, 1);
+				if (unlikely(vhost_enable_notify(&net->dev, vq))) { 
+					vhost_disable_notify(&net->dev, vq);
+					continue;
+				}
+				break;
+			}
+			vnet->remaining_credit -= len;
+			vnet->used_credit += len;
+		}
+#endif
 		iov_iter_init(&msg.msg_iter, WRITE, vq->iov, out, len);
 		iov_iter_advance(&msg.msg_iter, hdr_size);
 		/* Sanity check */
@@ -678,7 +706,9 @@ static int vhost_net_open(struct inode *inode, struct file *f)
 	struct vhost_dev *dev;
 	struct vhost_virtqueue **vqs;
 	int i;
-
+#ifdef ANCS
+	struct ancs_vm *vnet;
+#endif
 	n = kmalloc(sizeof *n, GFP_KERNEL | __GFP_NOWARN | __GFP_REPEAT);
 	if (!n) {
 		n = vmalloc(sizeof *n);
@@ -711,6 +741,33 @@ static int vhost_net_open(struct inode *inode, struct file *f)
 
 	f->private_data = n;
 
+#ifdef ANCS
+	vnet = kmalloc(sizeof(struct ancs_vm), GFP_KERNEL | __GFP_NOWARN | __GFP_REPEAT);
+	if(!vnet) {
+		kvfree(n);
+		kfree(vqs);
+		return -ENOMEM;
+	}
+	
+	INIT_LIST_HEAD(&vnet->proc_list);
+	list_add(&vnet->proc_list, &ancs_proc_list);
+	n->vnet = vnet;
+	INIT_LIST_HEAD(&vnet->active_list);
+	vnet->id = count++;
+	vnet->remaining_credit = 0;
+	vnet->weight = vnet->id;
+	vnet->max_credit = 0;
+	vnet->min_credit = 0;
+	vnet->used_credit = 0;
+	vnet->need_reschedule = false;
+	vnet->poll = n->poll;
+#ifdef CPU_CONTROL
+	vnet->stat.cpu_usage = 0;
+	vnet->stat.nw_usage = 0;
+	vnet->stat.virq = 0;
+	vnet->stat.flag = 3;
+#endif	
+#endif
 	return 0;
 }
 
@@ -803,6 +860,9 @@ static int vhost_net_release(struct inode *inode, struct file *f)
 	/* We do an extra flush before freeing memory,
 	 * since jobs can re-queue themselves. */
 	vhost_net_flush(n);
+#ifdef ANCS
+	kfree(n->vnet);
+#endif
 	kfree(n->dev.vqs);
 	kvfree(n);
 	return 0;
@@ -1043,6 +1103,9 @@ static long vhost_net_set_owner(struct vhost_net *n)
 	if (r)
 		vhost_net_clear_ubuf_info(n);
 	vhost_net_flush(n);
+#ifdef ANCS
+	n->vnet->vhost = current;
+#endif
 out:
 	mutex_unlock(&n->dev.mutex);
 	return r;

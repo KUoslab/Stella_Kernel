@@ -1,6 +1,7 @@
 #ifndef _VHOST_H
 #define _VHOST_H
 
+#define ANCS
 #include <linux/eventfd.h>
 #include <linux/vhost.h>
 #include <linux/mm.h>
@@ -35,6 +36,33 @@ struct vhost_poll {
 	struct vhost_dev	 *dev;
 };
 
+#ifdef ANCS
+#define MAX_NUMBER_VCPU	4
+struct ancs_stat {
+	unsigned int cpu_usage;
+	unsigned int nw_usage;
+	unsigned int virq;
+	int flag;
+};
+struct ancs_vm {
+	struct list_head active_list;
+	unsigned int weight;
+	bool need_reschedule;
+	unsigned int remaining_credit;
+	unsigned int min_credit;
+	unsigned int max_credit;
+	unsigned int used_credit;
+	int id;
+	struct list_head proc_list
+	struct vhost_poll *poll;
+	struct task_struct *vhost;
+
+#ifdef CPU_CONTROL	
+	struct task_struct *vcpu[MAX_NUMBER_VCPU];
+	struct ancs_stat stat;
+#endif
+};
+#endif
 void vhost_work_init(struct vhost_work *work, vhost_work_fn_t fn);
 void vhost_work_queue(struct vhost_dev *dev, struct vhost_work *work);
 
