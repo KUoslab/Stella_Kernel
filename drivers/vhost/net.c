@@ -367,7 +367,7 @@ static void handle_tx(struct vhost_net *net)
 		len = iov_length(vq->iov, out);
 #ifdef ANCS
 		ancs_head=&vnet->active_list;
-		if (ancs_head! = ancs_head->prev) { 
+		if (ancs_head != ancs_head->prev) { 
 			if(len > vnet->remaining_credit) {
 				vnet->need_reschedule = true;
 				vhost_discard_vq_desc(vq, 1);
