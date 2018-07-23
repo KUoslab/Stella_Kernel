@@ -53,7 +53,7 @@ struct ancs_vm {
 	unsigned int max_credit;
 	unsigned int used_credit;
 	int id;
-	struct list_head proc_list
+	struct list_head proc_list;
 	struct vhost_poll *poll;
 	struct task_struct *vhost;
 
