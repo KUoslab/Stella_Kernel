@@ -29,10 +29,10 @@
 #include <net/sock.h>
 
 #include "vhost.h"
-
+//kwlee
 #ifdef ANCS
-LIST_HEAD(ancs_proc_list);
-EXPORT_SYMBOL(ancs_proc_list);
+LIST_HEAD(ancs_proc_list);			/*AHN*/
+EXPORT_SYMBOL(ancs_proc_list);	/*AHN*/
 int count = 1;
 #endif
 static int experimental_zcopytx = 1;
@@ -367,18 +367,20 @@ static void handle_tx(struct vhost_net *net)
 		len = iov_length(vq->iov, out);
 #ifdef ANCS
 		ancs_head=&vnet->active_list;
-		if (ancs_head != ancs_head->prev) { 
-			if(len > vnet->remaining_credit) {
-				vnet->need_reschedule = true;
+		if(ancs_head!=ancs_head->prev){ 
+			/*if(len > vnet->remaining_credit){
+				printk("ancs: len = %d, remaining credit = %d\n", len, vnet->remaining_credit);
+				vnet->need_reschedule=true;
 				vhost_discard_vq_desc(vq, 1);
-				if (unlikely(vhost_enable_notify(&net->dev, vq))) { 
+				if (unlikely(vhost_enable_notify(&net->dev, vq))){ 
 					vhost_disable_notify(&net->dev, vq);
 					continue;
 				}
 				break;
 			}
-			vnet->remaining_credit -= len;
-			vnet->used_credit += len;
+			vnet->remaining_credit-=len;
+			vnet->used_credit+=len;*/
+			vnet->pps++;
 		}
 #endif
 		iov_iter_init(&msg.msg_iter, WRITE, vq->iov, out, len);
@@ -741,17 +743,17 @@ static int vhost_net_open(struct inode *inode, struct file *f)
 
 	f->private_data = n;
 
-#ifdef ANCS
-	vnet = kmalloc(sizeof(struct ancs_vm), GFP_KERNEL | __GFP_NOWARN | __GFP_REPEAT);
+#ifdef ANCS	//kwlee
+	vnet = kmalloc(sizeof (struct ancs_vm), GFP_KERNEL | __GFP_NOWARN | __GFP_REPEAT);
 	if(!vnet) {
 		kvfree(n);
 		kfree(vqs);
 		return -ENOMEM;
 	}
 	
-	INIT_LIST_HEAD(&vnet->proc_list);
-	list_add(&vnet->proc_list, &ancs_proc_list);
-	n->vnet = vnet;
+	INIT_LIST_HEAD(&vnet->proc_list);				/* AHN */
+	list_add(&vnet->proc_list, &ancs_proc_list);		/* AHN */
+	n->vnet=vnet;
 	INIT_LIST_HEAD(&vnet->active_list);
 	vnet->id = count++;
 	vnet->remaining_credit = 0;
@@ -760,7 +762,7 @@ static int vhost_net_open(struct inode *inode, struct file *f)
 	vnet->min_credit = 0;
 	vnet->used_credit = 0;
 	vnet->need_reschedule = false;
-	vnet->poll = n->poll;
+	vnet->poll=n->poll;
 #ifdef CPU_CONTROL
 	vnet->stat.cpu_usage = 0;
 	vnet->stat.nw_usage = 0;

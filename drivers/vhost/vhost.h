@@ -1,6 +1,6 @@
 #ifndef _VHOST_H
 #define _VHOST_H
-
+//kwlee
 #define ANCS
 #include <linux/eventfd.h>
 #include <linux/vhost.h>
@@ -36,15 +36,16 @@ struct vhost_poll {
 	struct vhost_dev	 *dev;
 };
 
-#ifdef ANCS
+#ifdef ANCS	//kwlee
 #define MAX_NUMBER_VCPU	4
-struct ancs_stat {
+#define CPU_CONTROL
+struct ancs_stat{
 	unsigned int cpu_usage;
 	unsigned int nw_usage;
 	unsigned int virq;
 	int flag;
 };
-struct ancs_vm {
+struct ancs_vm{
 	struct list_head active_list;
 	unsigned int weight;
 	bool need_reschedule;
@@ -53,13 +54,15 @@ struct ancs_vm {
 	unsigned int max_credit;
 	unsigned int used_credit;
 	int id;
-	struct list_head proc_list;
+	unsigned int pps;
+	struct list_head proc_list;	/*AHN*/
 	struct vhost_poll *poll;
 	struct task_struct *vhost;
-
+	struct task_struct *parent;
 #ifdef CPU_CONTROL	
 	struct task_struct *vcpu[MAX_NUMBER_VCPU];
 	struct ancs_stat stat;
+	bool vcpu_control;
 #endif
 };
 #endif
